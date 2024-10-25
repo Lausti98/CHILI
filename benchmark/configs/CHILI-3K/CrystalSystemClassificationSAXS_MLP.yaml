@@ -1,0 +1,32 @@
+Data_config:
+  most_frequent_class: null
+  n_samples_per_class: max
+  num_classes: null
+  split_strategy: random
+  stratify_distribution: null
+  stratify_on: null
+Model_config:
+  hidden_channels: 128
+  in_channels: 300
+  num_layers: 4
+  out_channels: 7
+Secondary_config:
+  hidden_channels: 4
+  in_channels: 21
+  out_channels: 1
+Train_config:
+  batch_size: 16
+  epochs: 1000
+  learning_rate: 0.001
+  max_patience: 50
+  seeds:
+  - 42
+  - 43
+  - 44
+  train_time: 3600
+dataset: CHILI-3K
+log_dir: results_n_samples_per_class_425
+model: MLP
+root: dataset
+save_latest_model: false
+task: CrystalSystemClassificationSAXS

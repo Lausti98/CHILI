@@ -1,0 +1,32 @@
+Data_config:
+  most_frequent_class: null
+  n_samples_per_class: 425
+  num_classes: null
+  split_strategy: stratified
+  stratify_distribution: equal
+  stratify_on: Crystal system (Number)
+Model_config:
+  depth: 2
+  hidden_channels: 32
+  in_channels: 7
+  out_channels: 64
+Secondary_config:
+  hidden_channels: 3032
+  in_channels: 192
+  out_channels: 6000
+Train_config:
+  batch_size: 16
+  epochs: 1000
+  learning_rate: 0.001
+  max_patience: 50
+  seeds:
+  - 42
+  - 43
+  - 44
+  train_time: 3600
+dataset: CHILI-100K
+log_dir: results_n_samples_per_class_425
+model: GraphUNet
+root: dataset
+save_latest_model: false
+task: xPDFRegression
