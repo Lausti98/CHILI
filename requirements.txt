@@ -39,5 +39,5 @@ typing_extensions==4.12.2
 tzdata==2024.2
 urllib3==2.2.3
 yarl==1.16.0
-torch-cluster==1.6.2
+torch-cluster==1.6.3
 torch-sparse==0.6.18
