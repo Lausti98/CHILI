@@ -7,6 +7,7 @@
 
 import warnings
 import yaml
+import json
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
@@ -33,13 +34,16 @@ def find_optimal_params(config, model_class, config_dict, dataset, param_grid) -
         
         params = dict(zip(param_grid.keys(), values))
         print(f'searching parameter-set: {params}')
-
+        
         loader_dict = load_to_dataloaders(dataset, params['batch_size'])
         config_dict['Model_config'] = merge_dicts(config_dict['Model_config'], params)
         config_dict['Train_config'] = merge_dicts(config_dict['Train_config'], params)
-        model = model_class(**config_dict['Model_config'])
+        model = model_class(**config_dict['Model_config']).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr = params['learning_rate'])
         train_loss, val_loss = train(config, model, None, optimizer, loader_dict)
+        
+        with open(f'parameter_tuning_{config_dict["task"]}_{config_dict["model"]}.txt', 'a+') as f:
+            f.write(f'{json.dumps(params)}: train_loss={train_loss:.4f}, validation_error={val_loss:.4f}\n')
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -107,7 +111,7 @@ def train(config, model, secondary, optimizer, loader_dict) -> None:
             patience += 1
 
         # Print checkpoint
-        print(f'Epoch: {epoch+1}/{max_epochs}, Train Loss: {train_loss:.4f}, Val MSE: {val_error:.4f}')
+        print(f'Epoch: {epoch+1}/{params["epochs"]}, Train Loss: {train_loss:.4f}, Val MSE: {val_error:.4f}')
 
     return best_train_error, best_error
 
@@ -199,8 +203,8 @@ model_configs = {
 
     }
 }
-model_configuration = model_configs['DimeNet']
-config_dict = load_config('benchmark/configs/CHILI-3K/DistanceRegression_DimeNet.yaml')
+model_configuration = model_configs['GCN']
+config_dict = load_config('benchmark/configs/CHILI-3K/DistanceRegression_GCN.yaml')
 print(f'{config_dict=}')
 model_class = eval(config_dict['model'])# model_configuration['class']
 model_kwargs = model_configuration['kwargs']
@@ -252,23 +256,31 @@ config['metric_function'] = nn.MSELoss()
 config['improved_function'] = lambda best, new: new < best if best is not None else True
 config['task_function'] = edge_attr_regression
 config['params'] = config_dict['Train_config']# {'max_patience': max_patience, 'max_epochs': max_epochs}
+config['params']['epochs'] = 200
+config['params']['max_patience'] = 20
 
 
 param_grid = {
-      'learning_rate': [0.0001, 0.001, 0.01],
-      'hidden_channels': [32, 64, 128],
+      'learning_rate': [0.0001, 0.001],# , 0.01],
+      'hidden_channels': [32, 64],# , 128],
       'num_layers': [2, 4, 6],
-      'batch_size': [16, 32, 64]
+      'batch_size': [16]#, 32, 64]
       # 
     }
 # Training & Validation
 tuning_res = find_optimal_params(config, model_class, config_dict, dataset, param_grid)
+best_params = tuning_res[0]
 
+loader_dict = load_to_dataloaders(dataset, best_params['batch_size'])
+config_dict['Model_config'] = merge_dicts(config_dict['Model_config'], best_params)
+config_dict['Train_config'] = merge_dicts(config_dict['Train_config'], best_params)
+model = model_class(**config_dict['Model_config']).to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr = best_params['learning_rate'])
 
 # Testing loop
 model.eval()
 test_error = 0
-test_loader = dataloader_dict['test_loader']
+test_loader = loader_dict['test_loader']
 for data in test_loader:
 
     # Send to device
