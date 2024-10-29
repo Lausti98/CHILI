@@ -15,6 +15,8 @@ from torch_geometric.nn.models import GCN, SchNet, DimeNet
 from benchmark.dataset_class import CHILI
 from benchmark.modules import MLP, Secondary
 import itertools
+from torcheval.metrics.functional import multiclass_f1_score
+from torch.nn.functional import cross_entropy
 
 ### GLOBAL VARIABLES
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -190,6 +192,15 @@ def edge_attr_regression(data, model, secondary, model_kwargs, device, config_di
     truth = data.edge_attr
     return pred, truth
 
+def atom_classification(data, model, secondary, model_kwargs, device, config_dict):
+    evaluated_kwargs = {}
+    for key, value in model_kwargs.items():
+        evaluated_kwargs[key] = eval(value)
+    evaluated_kwargs['x'] = data.pos_abs
+    pred = model.forward(**evaluated_kwargs)
+    truth = data.x[:,0].long()
+    return pred, truth
+
 model_configs = {
     "GCN": {
         "class": 'GCN',
@@ -203,8 +214,10 @@ model_configs = {
 
     }
 }
-model_configuration = model_configs['GCN']
-config_dict = load_config('benchmark/configs/CHILI-3K/DistanceRegression_GCN.yaml')
+task_name = 'AtomClassification'
+model_name = 'GCN'
+model_configuration = model_configs[model_name]
+config_dict = load_config(f'benchmark/configs/CHILI-3K/{task_name}_{model_name}.yaml')
 print(f'{config_dict=}')
 model_class = eval(config_dict['model'])# model_configuration['class']
 model_kwargs = model_configuration['kwargs']
@@ -233,7 +246,7 @@ root = 'benchmark/dataset/'
 dataset='CHILI-3K'
 dataset = get_chili_dataset(root, dataset)# CHILI(root, dataset)
 
-print(f'Running DistanceRegression example on {dataset}\n', flush=True)
+print(f'Running {task_name} example on {dataset}\n', flush=True)
 
 dataset = split_data(dataset)
 
@@ -251,10 +264,27 @@ loss_function = nn.SmoothL1Loss()
 metric_function = nn.MSELoss()
 improved_function = lambda best, new: new < best if best is not None else True
 
-config['loss_function'] = nn.SmoothL1Loss()
-config['metric_function'] = nn.MSELoss()
-config['improved_function'] = lambda best, new: new < best if best is not None else True
-config['task_function'] = edge_attr_regression
+# config['loss_function'] = nn.SmoothL1Loss()
+# config['metric_function'] = nn.MSELoss()
+task_configurations = {
+        "AtomClassification": {
+            "task_function": atom_classification,
+            "loss_function": lambda x,y: cross_entropy(x, y.long() - 1),
+            "metric_function": lambda x,y: multiclass_f1_score(x, y.long() - 1, num_classes=118, average='weighted'),
+            "metric_name": 'WeightedF1Score',
+            "improved_function": lambda best, new: new > best if best is not None else True,
+        },
+        "DistanceRegression": {
+            "task_function": edge_attr_regression,
+            "loss_function": nn.SmoothL1Loss(),
+            "metric_function": nn.MSELoss(),
+            "metric_name": 'MSE',
+            "improved_function": lambda best, new: new < best if best is not None else True,
+        }
+}
+# config['improved_function'] = lambda best, new: new < best if best is not None else True
+# config['task_function'] = edge_attr_regression if task_name == 'DistanceRegression' else atom_classification
+config.update(task_configurations[task_name])
 config['params'] = config_dict['Train_config']# {'max_patience': max_patience, 'max_epochs': max_epochs}
 config['params']['epochs'] = 200
 config['params']['max_patience'] = 20
